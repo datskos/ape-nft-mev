@@ -13,21 +13,22 @@ contract BorrowAndClaimTest is DSTest {
     BorrowAndClaim lc;
     Vm vm;
 
+    uint256 tokenId = 4107;
+
     function setUp() public {
         vm = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
         lc = new BorrowAndClaim(
             0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, // weth
             0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5, // aave address provider,
             0x59728544B08AB483533076417FbBB2fD0B17CE3a, // looksrare exchange
-            0xf42aa99F011A1fA7CDA90E5E98b277E306BcA83e, // transfer manager
+            0xf42aa99F011A1fA7CDA90E5E98b277E306BcA83e, // looksrare transfer manager
             0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258 // otherdeed
         );
     }
 
-    // in a production set up you would get these params from the LooksRare API. you better be fast
+    // in a production setup you would get these params from the LooksRare API. you better be fast
     function _getBuyParams() internal view returns (LooksRare.TakerOrder memory, LooksRare.MakerOrder memory) {
         uint256 price = 28 ether;
-        uint256 tokenId = 4107;
         uint256 minPct = 8500;
 
         LooksRare.TakerOrder memory takerBid = LooksRare.TakerOrder({
@@ -62,8 +63,7 @@ contract BorrowAndClaimTest is DSTest {
     }
 
     function _getSellParams() internal view returns (LooksRare.TakerOrder memory, LooksRare.MakerOrder memory) {
-        uint256 price = 0x16e5fa42076500000;
-        uint256 tokenId = 4107;
+        uint256 price = 26.4 ether;
         uint256 minPct = 8500;
 
         LooksRare.TakerOrder memory takerAsk = LooksRare.TakerOrder({
@@ -103,14 +103,14 @@ contract BorrowAndClaimTest is DSTest {
         (LooksRare.TakerOrder memory takerBid, LooksRare.MakerOrder memory makerAsk) = _getBuyParams();
         (LooksRare.TakerOrder memory takerAsk, LooksRare.MakerOrder memory makerBid) = _getSellParams();
 
-        uint256 exchangeFee = lc.calculateTotalExchangeFee(makerBid.strategy, makerBid.collection, 4107, takerAsk.price);
-        uint256 lendingFee = takerBid.price * 9 / 10000;
+        uint256 exchangeFee = lc.calculateTotalExchangeFee(makerBid.strategy, makerBid.collection, tokenId, takerAsk.price);
+        uint256 lendingFee = takerBid.price * 9 / 10000; // AAVE flash loan interest rate is 9 BPS
         uint256 spread = takerBid.price - takerAsk.price;
         uint256 totalFee = exchangeFee + lendingFee + spread;
         assertEq(totalFee, 2813200000000000000);
 
         vm.warp(makerAsk.startTime);
-        lc.grab{value: 2 * totalFee}(takerBid, makerAsk, takerAsk, makerBid);
+        lc.grab{value: totalFee}(takerBid, makerAsk, takerAsk, makerBid);
         assertEq(IERC721(address(lc.otherdeedContract())).balanceOf(address(lc)), 1); // got it
     }
 
